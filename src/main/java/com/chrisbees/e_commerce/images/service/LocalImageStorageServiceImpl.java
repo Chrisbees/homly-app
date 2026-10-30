@@ -19,7 +19,7 @@ import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.multipart.MultipartFile;
-
+import com.chrisbees.e_commerce.property.service.PropertyAuthorizationService;
 import com.chrisbees.e_commerce.images.domain.PropertyImage;
 import com.chrisbees.e_commerce.images.dto.ImageResponse;
 import com.chrisbees.e_commerce.images.dto.ImageResponseMapper;
@@ -41,14 +41,16 @@ public class LocalImageStorageServiceImpl implements ImageStorageService {
     private final PropertyRepository propertyRepository;
     private final ImageResponseMapper imageResponseMapper;
     private final Path rootPath;
+    private final PropertyAuthorizationService propertyAuthorizationService;
 
     public LocalImageStorageServiceImpl(ImageStorageProperties imageStorageProperties,
             ImageRepository imageRepository, PropertyRepository propertyRepository,
-            ImageResponseMapper imageResponseMapper) {
+            ImageResponseMapper imageResponseMapper, PropertyAuthorizationService propertyAuthorizationService) {
         this.imageStorageProperties = imageStorageProperties;
         this.imageRepository = imageRepository;
         this.propertyRepository = propertyRepository;
         this.imageResponseMapper = imageResponseMapper;
+        this.propertyAuthorizationService = propertyAuthorizationService;
         this.rootPath = Paths.get(imageStorageProperties.basePath());
     }
 
@@ -58,6 +60,7 @@ public class LocalImageStorageServiceImpl implements ImageStorageService {
             throws IOException {
         var property = propertyRepository.findByUuidAndDeletedFalse(propertyUuid)
                 .orElseThrow(() -> new PropertyNotFoundException("Property Does not Exists"));
+                propertyAuthorizationService.checkOwnership(property);
         LocalDate today = LocalDate.now();
         Path dateDirectory = rootPath.resolve(
                 today.getYear() + File.separator +

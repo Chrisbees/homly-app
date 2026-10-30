@@ -46,8 +46,11 @@ public class CategoryServiceImpl implements CategoryService{
 
     @Override
     public List<CategoryResponse> returnAllCategories() {
-        return Arrays.asList(new CategoryResponse());
-    }
+    return categoryRepository.findAll()
+            .stream()
+            .map(categoryResponseMapper::toDto)
+            .toList();
+}
 
     @Override
     @Transactional

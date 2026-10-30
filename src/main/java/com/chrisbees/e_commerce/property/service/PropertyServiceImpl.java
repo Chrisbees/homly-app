@@ -11,6 +11,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.web.PagedModel;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import com.chrisbees.e_commerce.category.domain.Category;
@@ -29,6 +33,8 @@ import com.chrisbees.e_commerce.property.domain.dto.response.PropertyResponse;
 import com.chrisbees.e_commerce.property.domain.dto.response.PropertyWithImagesResponse;
 import com.chrisbees.e_commerce.property.exception.PropertyNotFoundException;
 import com.chrisbees.e_commerce.property.repositiory.PropertyRepository;
+import com.chrisbees.e_commerce.user.User;
+import com.chrisbees.e_commerce.user.UserRepository;
 
 import jakarta.transaction.Transactional;
 
@@ -42,12 +48,16 @@ public class PropertyServiceImpl implements PropertyService {
     private final PropertyRepository propertyRepository;
     private final CategoryRepository categoryRepository;
     private final UpdateToPropertyMapper updateToPropertyMapper;
+    private final UserRepository userRepository;
+    private final PropertyAuthorizationService propertyAuthorizationService;
 
     public PropertyServiceImpl(PropertyRequestMapper propertyRequestMapper,
             PropertyResponseMapper propertyResponseMapper,
             PropertyRepository propertyRepository, CategoryRepository categoryRepository,
             ImageResponseMapper imageResponseMapper,
-            PropertyWithImagesResponseMapper propertyWithImagesResponseMapper, UpdateToPropertyMapper updateToPropertyMapper) {
+            PropertyWithImagesResponseMapper propertyWithImagesResponseMapper,
+            UpdateToPropertyMapper updateToPropertyMapper,
+            UserRepository userRepository, PropertyAuthorizationService propertyAuthorizationService) {
         this.propertyRequestMapper = propertyRequestMapper;
         this.propertyResponseMapper = propertyResponseMapper;
         this.imageResponseMapper = imageResponseMapper;
@@ -55,6 +65,8 @@ public class PropertyServiceImpl implements PropertyService {
         this.propertyRepository = propertyRepository;
         this.categoryRepository = categoryRepository;
         this.updateToPropertyMapper = updateToPropertyMapper;
+        this.userRepository = userRepository;
+        this.propertyAuthorizationService = propertyAuthorizationService;
     }
 
     @Override
@@ -67,10 +79,17 @@ public class PropertyServiceImpl implements PropertyService {
         } else {
             System.out.println("Category does not exits");
         }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        String email = authentication.getName();
+
+        User owner = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
         property.setSlug(property.getName()
                 .replace(" ", "-")
                 .toLowerCase());
         property.setUuid(UUID.randomUUID().toString());
+        property.setOwner(owner);
         Property createdProperty = propertyRepository.save(property);
         return propertyResponseMapper.toDto(createdProperty, List.of());
     }
@@ -95,12 +114,12 @@ public class PropertyServiceImpl implements PropertyService {
         return new PagedModel<>(propertyList);
     }
 
-
     @Override
     @Transactional
     public PropertyResponse updateProperty(String uuid, UpdatePropertyRequest propertyRequest) {
         Property property = propertyRepository.findByUuidAndDeletedFalse(uuid)
                 .orElseThrow(() -> new PropertyNotFoundException("property not found"));
+        propertyAuthorizationService.checkOwnership(property);
         updateToPropertyMapper.mapUpdateRequestToProperty(propertyRequest, property);
 
         if (property.getPropertyImages() != null) {
@@ -111,14 +130,14 @@ public class PropertyServiceImpl implements PropertyService {
             return propertyResponseMapper.toDto(property, List.of());
     }
 
-    
-
     @Override
     public void deleteProperty(String uuid) {
         Property property = propertyRepository.findByUuidAndDeletedFalse(uuid)
                 .orElseThrow(() -> new PropertyNotFoundException("property not found"));
-                property.setDeleted(true);
-                property.setDeletedAt(Instant.now());
+        propertyAuthorizationService.checkOwnership(property);
+
+        property.setDeleted(true);
+        property.setDeletedAt(Instant.now());
         propertyRepository.save(property);
     }
 

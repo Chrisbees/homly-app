@@ -13,6 +13,7 @@ import com.chrisbees.e_commerce.category.domain.Category;
 import com.chrisbees.e_commerce.images.domain.PropertyImage;
 import com.chrisbees.e_commerce.property.domain.enums.PaymentFrequency;
 import com.chrisbees.e_commerce.property.domain.enums.StatusEnum;
+import com.chrisbees.e_commerce.user.User;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
@@ -102,5 +103,10 @@ public class Property {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "owner_id", nullable = false)
+    @ToString.Exclude
+    private User owner;
 
 }
